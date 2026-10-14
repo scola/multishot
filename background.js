@@ -10,7 +10,8 @@ const DEFAULT_OPTIONS = {
   scrollToTop: true,  // 开始前先滚动到顶部
   subfolder: '',      // 下载目录下的子文件夹（留空则直接保存到 ~/Downloads/）
   format: 'png',      // png | jpeg
-  saveMode: 'zip'     // zip：打包成一个 ZIP 文件；files：逐张保存图片
+  saveMode: 'zip',    // zip：打包成一个 ZIP 文件；files：逐张保存图片
+  targetArea: 'right' // right: 优先右侧区域（如评论区/右侧栏）| auto: 顶层智能识别 | left: 优先左侧区域 | center: 优先中间主内容
 };
 
 // captureVisibleTab 限制每秒最多 2 次
@@ -137,7 +138,7 @@ async function saveAll(shots, opts, prefix, sub) {
 
 // 自包含函数：在目标页面中执行滚动和状态检测
 // action: 'init' | 'scroll'
-function pageAction(action, overlap, scrollToTop) {
+function pageAction(action, overlap, scrollToTop, targetArea = 'right') {
   const root = document.scrollingElement || document.documentElement || document.body;
   const isRoot = (el) => el === root || el === document.documentElement || el === document.body;
 
@@ -175,57 +176,149 @@ function pageAction(action, overlap, scrollToTop) {
     return el.scrollHeight - el.clientHeight > 5;
   };
 
-  // 智能寻找主滚动容器
-  const findMainScroller = () => {
-    // 1. 如果窗口/根文档本身有明显滚动条
-    if (canScroll(root)) return root;
+  // 计算元素在 DOM 和层叠上下文中的综合层级权重 (z-index + position)
+  const getLayerDepth = (el) => {
+    if (isRoot(el)) return 0;
+    let depth = 0;
+    let cur = el;
+    while (cur && cur !== document.documentElement && cur !== document.body) {
+      depth += 1;
+      const s = window.getComputedStyle(cur);
+      const z = parseInt(s.zIndex, 10);
+      if (!isNaN(z) && z > 0) {
+        depth += Math.min(10000, z * 10);
+      }
+      if (s.position === 'fixed' || s.position === 'sticky') {
+        depth += 1000;
+      } else if (s.position === 'absolute') {
+        depth += 100;
+      }
+      if (cur.tagName === 'DIALOG' || cur.getAttribute('role') === 'dialog') {
+        depth += 5000;
+      }
+      cur = cur.parentElement;
+    }
+    return depth;
+  };
 
-    // 2. 从屏幕靠右/靠中位置探测真实元素祖先链中的滚动容器
-    const testPoints = [
-      [window.innerWidth - 30, window.innerHeight / 2],
-      [window.innerWidth / 2, window.innerHeight / 2]
+  // 根据用户选取的区域偏好（right: 优先右侧评论区 / left: 优先左侧 / center: 优先中间视频 / auto: 顶层自动）评分
+  const getAreaScore = (el) => {
+    if (isRoot(el)) return 1;
+    const r = el.getBoundingClientRect();
+    const centerX = (r.left + r.right) / 2;
+    const normX = centerX / window.innerWidth; // 0 (最左) ~ 1 (最右)
+
+    if (targetArea === 'right') {
+      // 位于屏幕右半侧（例如抖音评论区通常在 x > 0.5），右侧越靠边缘得分越高
+      return normX >= 0.5 ? 5000 + normX * 1000 : 1;
+    } else if (targetArea === 'center') {
+      // 位于屏幕正中（例如抖音视频区域），越靠近中心得分越高
+      const distFromCenter = Math.abs(normX - 0.5);
+      return (1 - distFromCenter) * 3000;
+    } else if (targetArea === 'left') {
+      // 位于屏幕左半侧
+      return normX < 0.5 ? 5000 + (1 - normX) * 1000 : 1;
+    }
+    return 10;
+  };
+
+  // 严格从视觉最上层和指定区域探测可滚动容器
+  const findTopmostScroller = () => {
+    const candidates = new Map(); // el -> { el, layerDepth, areaScore, visible, scrollRange }
+
+    const register = (el) => {
+      if (!el || !canScroll(el)) return;
+      if (candidates.has(el)) return;
+      const visible = getVisibleArea(el);
+      // 可见面积必须占视口的 5% 以上，排除无意义的小下拉菜单
+      if (visible < (window.innerWidth * window.innerHeight * 0.05)) return;
+
+      const layerDepth = getLayerDepth(el);
+      const scrollRange = el.scrollHeight - el.clientHeight;
+      const areaScore = getAreaScore(el);
+      candidates.set(el, { el, layerDepth, areaScore, visible, scrollRange });
+    };
+
+    // 1. 使用网格采样点（根据 targetArea 重点采样右侧/中间/左侧）
+    const samplePoints = [
+      [0.85, 0.5], [0.85, 0.3], [0.85, 0.7], [0.75, 0.5], // 右侧高频采样点（抖音评论区等）
+      [0.5, 0.5], [0.5, 0.3], [0.5, 0.7],                 // 中间采样点（视频区）
+      [0.2, 0.5], [0.2, 0.3]                              // 左侧采样点
     ];
-    for (const [x, y] of testPoints) {
-      let cur = document.elementFromPoint(Math.max(10, x), Math.max(10, y));
+    for (const [rx, ry] of samplePoints) {
+      const x = Math.round(window.innerWidth * rx);
+      const y = Math.round(window.innerHeight * ry);
+      let cur = document.elementFromPoint(x, y);
       while (cur && cur !== document.documentElement && cur !== document.body) {
-        if (canScroll(cur) && getVisibleArea(cur) > (window.innerWidth * window.innerHeight * 0.2)) {
-          return cur;
-        }
+        register(cur);
         cur = cur.parentElement;
       }
     }
 
-    // 3. 扫描所有可见容器中滚动区域最大的
-    let best = null;
-    let bestScore = 0;
-    const candidates = document.querySelectorAll('main, [role="main"], article, section, div');
-    for (const el of candidates) {
-      if (canScroll(el)) {
-        const score = getVisibleArea(el) * (el.scrollHeight - el.clientHeight);
-        if (score > bestScore) {
-          best = el;
-          bestScore = score;
-        }
+    // 2. 检查顶层特定容器（dialog、modal、drawer、评论区抽屉组件）
+    const highLevelContainers = document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"], .modal, .drawer, [class*="comment"], [id*="comment"]');
+    for (const d of highLevelContainers) {
+      let cur = d;
+      while (cur && cur !== document.documentElement && cur !== document.body) {
+        register(cur);
+        cur = cur.parentElement;
+      }
+      for (const descendant of d.querySelectorAll('*')) {
+        register(descendant);
       }
     }
-    return best || root;
+
+    // 3. 将整个页面根容器作为兜底候选
+    if (canScroll(root)) {
+      candidates.set(root, {
+        el: root,
+        layerDepth: 0,
+        areaScore: 1,
+        visible: window.innerWidth * window.innerHeight,
+        scrollRange: Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight || 0) - window.innerHeight
+      });
+    }
+
+    if (candidates.size === 0) return root;
+
+    // 排序逻辑：
+    // 1. 位置匹配偏好（如果选了右侧评论区，右侧区域获得压倒性高优先级）
+    // 2. 层级深度（模态窗/浮层优先）
+    // 3. 滚动有效面积
+    const sorted = Array.from(candidates.values()).sort((a, b) => {
+      if (b.areaScore !== a.areaScore) {
+        return b.areaScore - a.areaScore;
+      }
+      if (b.layerDepth !== a.layerDepth) {
+        return b.layerDepth - a.layerDepth;
+      }
+      return b.visible * b.scrollRange - a.visible * a.scrollRange;
+    });
+
+    return sorted[0].el;
   };
 
   const describe = (el) => {
-    if (isRoot(el)) return '页面整体 (Window/Document)';
+    if (isRoot(el)) return '页面主视图 (Window/Document)';
     const tag = el.tagName.toLowerCase();
     const id = el.id ? `#${el.id}` : '';
     const cls = typeof el.className === 'string' && el.className.trim()
       ? '.' + el.className.trim().split(/\s+/)[0]
       : '';
-    return `${tag}${id}${cls}`;
+    const r = el.getBoundingClientRect();
+    const isRight = (r.left + r.right) / 2 >= window.innerWidth * 0.5 ? ' [右侧区域/评论区]' : ' [中左侧内容]';
+    return `${tag}${id}${cls}${isRight}`;
   };
 
-  // 派发真实的 Wheel 事件（很多现代框架靠监听 wheel 来驱动虚拟列表）
+  // 派发真实的 Wheel 事件到该容器正中央
   const dispatchWheel = (target, deltaY) => {
-    const rect = isRoot(target) ? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight } : target.getBoundingClientRect();
-    const clientX = Math.max(10, Math.min(window.innerWidth - 10, rect.right - 20));
-    const clientY = Math.max(10, Math.min(window.innerHeight - 10, (rect.top + rect.bottom) / 2));
+    const rect = isRoot(target)
+      ? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+      : target.getBoundingClientRect();
+
+    // 确保把事件派发在最上层滚动区域的内部可视中心
+    const clientX = Math.round((Math.max(0, rect.left) + Math.min(window.innerWidth, rect.right)) / 2);
+    const clientY = Math.round((Math.max(0, rect.top) + Math.min(window.innerHeight, rect.bottom)) / 2);
 
     const event = new WheelEvent('wheel', {
       bubbles: true,
@@ -239,7 +332,8 @@ function pageAction(action, overlap, scrollToTop) {
       deltaY,
       deltaMode: WheelEvent.DOM_DELTA_PIXEL
     });
-    (isRoot(target) ? (document.elementFromPoint(clientX, clientY) || document.body) : target).dispatchEvent(event);
+    const dispatchTarget = document.elementFromPoint(clientX, clientY) || (isRoot(target) ? document.body : target);
+    dispatchTarget.dispatchEvent(event);
   };
 
   // 派发 PageDown / ArrowDown 键盘事件作为强力兜底
@@ -265,7 +359,7 @@ function pageAction(action, overlap, scrollToTop) {
     return Math.round(maxBottom);
   };
 
-  const target = findMainScroller();
+  const target = findTopmostScroller();
   const beforePos = getScrollPos(target);
 
   if (action === 'init') {
@@ -362,7 +456,7 @@ async function startCapture(tab) {
     const [{ result: init }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: pageAction,
-      args: ['init', 0, !!opts.scrollToTop]
+      args: ['init', 0, !!opts.scrollToTop, opts.targetArea || 'right']
     });
     targetName = init?.targetName || '';
     if (opts.scrollToTop) await sleep(opts.delay);
@@ -384,7 +478,7 @@ async function startCapture(tab) {
       const [{ result: scrollRes }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: pageAction,
-        args: ['scroll', overlap, false]
+        args: ['scroll', overlap, false, opts.targetArea || 'right']
       });
 
       if (scrollRes?.targetName) targetName = scrollRes.targetName;
