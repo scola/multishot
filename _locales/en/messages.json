@@ -1,0 +1,176 @@
+{
+  "extName": {
+    "message": "Scroll Screenshot"
+  },
+  "extDesc": {
+    "message": "Capture visible tab, automatically save to Downloads, scroll to next area, and repeat until the bottom."
+  },
+  "commandToggle": {
+    "message": "Start / Stop Scrolling Screenshot"
+  },
+  "popupTitle": {
+    "message": "Scroll Screenshot"
+  },
+  "btnStart": {
+    "message": "Start Capture"
+  },
+  "btnStop": {
+    "message": "Stop & Save"
+  },
+  "btnStopping": {
+    "message": "Stopping..."
+  },
+  "btnSaving": {
+    "message": "Saving..."
+  },
+  "lblDelay": {
+    "message": "Delay after scroll (ms)"
+  },
+  "lblMaxShots": {
+    "message": "Max shots (0 = unlimited)"
+  },
+  "lblOverlap": {
+    "message": "Overlap (px)"
+  },
+  "lblFormat": {
+    "message": "Format"
+  },
+  "lblSaveMode": {
+    "message": "Save Method"
+  },
+  "optZip": {
+    "message": "Pack into a single ZIP file"
+  },
+  "optFiles": {
+    "message": "Save as individual images"
+  },
+  "lblSubfolder": {
+    "message": "Subfolder (under ~/Downloads/)"
+  },
+  "placeholderSubfolder": {
+    "message": "Leave empty to save directly to Downloads"
+  },
+  "lblScrollToTop": {
+    "message": "Scroll to top before starting"
+  },
+  "noticeText": {
+    "message": "Screenshots are buffered in memory and saved all at once. If a Save As dialog appears, please disable 'Ask where to save each file before downloading' in Chrome settings."
+  },
+  "btnOpenSettings": {
+    "message": "Open Download Settings"
+  },
+  "hintShortcut": {
+    "message": "Shortcut: Alt+Shift+S to start / stop"
+  },
+  "statusRestrictedPage": {
+    "message": "Cannot capture browser built-in or store pages. Please try on a regular web page."
+  },
+  "statusStartFailed": {
+    "message": "Failed to start: $ERROR$",
+    "placeholders": {
+      "error": { "content": "$1" }
+    }
+  },
+  "statusCapturing": {
+    "message": "Capturing..."
+  },
+  "statusBuffered": {
+    "message": "Captured $COUNT$ screenshots (in memory)",
+    "placeholders": {
+      "count": { "content": "$1" }
+    }
+  },
+  "statusSaving": {
+    "message": "$REASON$, saving $COUNT$ images...",
+    "placeholders": {
+      "reason": { "content": "$1" },
+      "count": { "content": "$2" }
+    }
+  },
+  "statusSavingIndex": {
+    "message": "Saving $CURRENT$/$TOTAL$...",
+    "placeholders": {
+      "current": { "content": "$1" },
+      "total": { "content": "$2" }
+    }
+  },
+  "statusPackingIndex": {
+    "message": "Packaging $CURRENT$/$TOTAL$...",
+    "placeholders": {
+      "current": { "content": "$1" },
+      "total": { "content": "$2" }
+    }
+  },
+  "statusWritingZip": {
+    "message": "Writing ZIP file..."
+  },
+  "statusDone": {
+    "message": "Done ($REASON$): saved $RESULT$ to ~/Downloads/$SUB$",
+    "placeholders": {
+      "reason": { "content": "$1" },
+      "result": { "content": "$2" },
+      "sub": { "content": "$3" }
+    }
+  },
+  "statusEmpty": {
+    "message": "No screenshots captured. $REASON$",
+    "placeholders": {
+      "reason": { "content": "$1" }
+    }
+  },
+  "statusSaveError": {
+    "message": "Failed to save: $ERROR$",
+    "placeholders": {
+      "error": { "content": "$1" }
+    }
+  },
+  "reasonStopped": {
+    "message": "Stopped manually"
+  },
+  "reasonMaxReached": {
+    "message": "Max shots reached"
+  },
+  "reasonBottomReached": {
+    "message": "Scrolled to bottom"
+  },
+  "reasonNoChange": {
+    "message": "No more content, bottom reached"
+  },
+  "reasonTabLeft": {
+    "message": "Target tab is no longer active"
+  },
+  "reasonInterrupted": {
+    "message": "Capture interrupted: $ERROR$",
+    "placeholders": {
+      "error": { "content": "$1" }
+    }
+  },
+  "scrollAreaPrefix": {
+    "message": "Scroll target: $TARGET$",
+    "placeholders": {
+      "target": { "content": "$1" }
+    }
+  },
+  "mainView": {
+    "message": "Main page view (Window/Document)"
+  },
+  "rightAreaTag": {
+    "message": " [Right area / Comments]"
+  },
+  "leftCenterTag": {
+    "message": " [Center/Left content]"
+  },
+  "resultFiles": {
+    "message": "$COUNT$ images",
+    "placeholders": {
+      "count": { "content": "$1" }
+    }
+  },
+  "resultZip": {
+    "message": "$NAME$ ($COUNT$ images)",
+    "placeholders": {
+      "name": { "content": "$1" },
+      "count": { "content": "$2" }
+    }
+  }
+}

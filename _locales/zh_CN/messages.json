@@ -1,0 +1,176 @@
+{
+  "extName": {
+    "message": "滚动截图"
+  },
+  "extDesc": {
+    "message": "截取当前标签页可见区域并自动保存到下载目录，然后自动向下滚动，重复截图直到页面底部。"
+  },
+  "commandToggle": {
+    "message": "开始 / 停止滚动截图"
+  },
+  "popupTitle": {
+    "message": "滚动截图"
+  },
+  "btnStart": {
+    "message": "开始截图"
+  },
+  "btnStop": {
+    "message": "停止并保存"
+  },
+  "btnStopping": {
+    "message": "正在停止…"
+  },
+  "btnSaving": {
+    "message": "正在保存…"
+  },
+  "lblDelay": {
+    "message": "滚动后等待 (ms)"
+  },
+  "lblMaxShots": {
+    "message": "最多张数（0=不限）"
+  },
+  "lblOverlap": {
+    "message": "重叠像素"
+  },
+  "lblFormat": {
+    "message": "格式"
+  },
+  "lblSaveMode": {
+    "message": "全部截完后的保存方式"
+  },
+  "optZip": {
+    "message": "打包成一个 ZIP 文件（最多弹一次框）"
+  },
+  "optFiles": {
+    "message": "逐张保存为图片文件"
+  },
+  "lblSubfolder": {
+    "message": "子文件夹（可选，位于 ~/Downloads/ 下）"
+  },
+  "placeholderSubfolder": {
+    "message": "留空直接保存到 Downloads"
+  },
+  "lblScrollToTop": {
+    "message": "开始前先滚动到顶部"
+  },
+  "noticeText": {
+    "message": "截图过程中不会保存，全部截完后一次性保存。若仍弹出“另存为”框，是因为 Chrome 开启了 “下载前询问每个文件的保存位置”，关闭后即可直接保存。"
+  },
+  "btnOpenSettings": {
+    "message": "打开下载设置"
+  },
+  "hintShortcut": {
+    "message": "快捷键：Alt+Shift+S 开始 / 停止"
+  },
+  "statusRestrictedPage": {
+    "message": "浏览器内置页面不允许截图，请在普通网页上使用。"
+  },
+  "statusStartFailed": {
+    "message": "启动失败：$ERROR$",
+    "placeholders": {
+      "error": { "content": "$1" }
+    }
+  },
+  "statusCapturing": {
+    "message": "正在截图…"
+  },
+  "statusBuffered": {
+    "message": "已截取 $COUNT$ 张（暂存内存）",
+    "placeholders": {
+      "count": { "content": "$1" }
+    }
+  },
+  "statusSaving": {
+    "message": "$REASON$，正在保存 $COUNT$ 张…",
+    "placeholders": {
+      "reason": { "content": "$1" },
+      "count": { "content": "$2" }
+    }
+  },
+  "statusSavingIndex": {
+    "message": "正在保存 $CURRENT$/$TOTAL$…",
+    "placeholders": {
+      "current": { "content": "$1" },
+      "total": { "content": "$2" }
+    }
+  },
+  "statusPackingIndex": {
+    "message": "正在打包 $CURRENT$/$TOTAL$…",
+    "placeholders": {
+      "current": { "content": "$1" },
+      "total": { "content": "$2" }
+    }
+  },
+  "statusWritingZip": {
+    "message": "正在写入 ZIP…"
+  },
+  "statusDone": {
+    "message": "完成（$REASON$）：已保存 $RESULT$ 到 ~/Downloads/$SUB$",
+    "placeholders": {
+      "reason": { "content": "$1" },
+      "result": { "content": "$2" },
+      "sub": { "content": "$3" }
+    }
+  },
+  "statusEmpty": {
+    "message": "未截取到图片。$REASON$",
+    "placeholders": {
+      "reason": { "content": "$1" }
+    }
+  },
+  "statusSaveError": {
+    "message": "保存失败：$ERROR$",
+    "placeholders": {
+      "error": { "content": "$1" }
+    }
+  },
+  "reasonStopped": {
+    "message": "已手动停止"
+  },
+  "reasonMaxReached": {
+    "message": "已达到最多张数"
+  },
+  "reasonBottomReached": {
+    "message": "已滚动到底部"
+  },
+  "reasonNoChange": {
+    "message": "内容无变化，已到底部"
+  },
+  "reasonTabLeft": {
+    "message": "目标标签页已不在前台"
+  },
+  "reasonInterrupted": {
+    "message": "截图中断：$ERROR$",
+    "placeholders": {
+      "error": { "content": "$1" }
+    }
+  },
+  "scrollAreaPrefix": {
+    "message": "滚动区域：$TARGET$",
+    "placeholders": {
+      "target": { "content": "$1" }
+    }
+  },
+  "mainView": {
+    "message": "页面主视图 (Window/Document)"
+  },
+  "rightAreaTag": {
+    "message": " [右侧区域/评论区]"
+  },
+  "leftCenterTag": {
+    "message": " [中左侧内容]"
+  },
+  "resultFiles": {
+    "message": "$COUNT$ 张图片",
+    "placeholders": {
+      "count": { "content": "$1" }
+    }
+  },
+  "resultZip": {
+    "message": "$NAME$（含 $COUNT$ 张）",
+    "placeholders": {
+      "name": { "content": "$1" },
+      "count": { "content": "$2" }
+    }
+  }
+}

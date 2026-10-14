@@ -36,16 +36,32 @@ async function saveOptions() {
   await chrome.storage.local.set({ options_v2: options });
 }
 
+function localizeDOM() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const key = el.getAttribute('data-i18n');
+    const msg = chrome.i18n.getMessage(key);
+    if (msg) el.textContent = msg;
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    const msg = chrome.i18n.getMessage(key);
+    if (msg) el.placeholder = msg;
+  });
+}
+
 function render({ state = 'idle', message = '' }) {
   if (state === 'running') {
-    btn.textContent = '停止并保存';
+    btn.textContent = chrome.i18n.getMessage('btnStop');
     btn.classList.add('stop');
     btn.disabled = false;
-  } else if (state === 'stopping' || state === 'saving') {
-    btn.textContent = state === 'stopping' ? '正在停止…' : '正在保存…';
+  } else if (state === 'stopping') {
+    btn.textContent = chrome.i18n.getMessage('btnStopping');
+    btn.disabled = true;
+  } else if (state === 'saving') {
+    btn.textContent = chrome.i18n.getMessage('btnSaving');
     btn.disabled = true;
   } else {
-    btn.textContent = '开始截图';
+    btn.textContent = chrome.i18n.getMessage('btnStart');
     btn.classList.remove('stop');
     btn.disabled = false;
   }
@@ -67,11 +83,13 @@ btn.addEventListener('click', async () => {
   if (!tab) return;
   if (/^(chrome|edge|about|chrome-extension):/.test(tab.url || '') ||
       (tab.url || '').startsWith('https://chromewebstore.google.com')) {
-    statusEl.textContent = '浏览器内置页面不允许截图，请在普通网页上使用。';
+    statusEl.textContent = chrome.i18n.getMessage('statusRestrictedPage');
     return;
   }
   const res = await chrome.runtime.sendMessage({ type: 'start', tabId: tab.id });
-  if (!res?.ok) statusEl.textContent = `启动失败：${res?.error || '未知错误'}`;
+  if (!res?.ok) {
+    statusEl.textContent = chrome.i18n.getMessage('statusStartFailed', [res?.error || 'Unknown']);
+  }
 });
 
 for (const f of fields) $(f).addEventListener('change', saveOptions);
@@ -84,5 +102,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session') refresh();
 });
 
+localizeDOM();
 loadOptions();
 refresh();

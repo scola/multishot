@@ -1,52 +1,51 @@
 <!doctype html>
-<html lang="zh-CN">
+<html>
 <head>
   <meta charset="utf-8">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h1>滚动截图</h1>
+  <h1 data-i18n="popupTitle">Scroll Screenshot</h1>
 
-  <button id="toggle" class="primary">开始截图</button>
+  <button id="toggle" class="primary" data-i18n="btnStart">Start Capture</button>
   <p id="status" class="status"></p>
 
   <fieldset>
-    <label>滚动后等待 (ms)
+    <label><span data-i18n="lblDelay">Delay after scroll (ms)</span>
       <input id="delay" type="number" min="200" step="100">
     </label>
-    <label>最多张数（0=不限）
+    <label><span data-i18n="lblMaxShots">Max shots (0 = unlimited)</span>
       <input id="maxShots" type="number" min="0" step="1">
     </label>
-    <label>重叠像素
+    <label><span data-i18n="lblOverlap">Overlap (px)</span>
       <input id="overlap" type="number" min="0" step="10">
     </label>
-    <label>格式
+    <label><span data-i18n="lblFormat">Format</span>
       <select id="format">
         <option value="png">PNG</option>
         <option value="jpeg">JPEG</option>
       </select>
     </label>
-    <label class="wide">全部截完后的保存方式
+    <label class="wide"><span data-i18n="lblSaveMode">Save Method</span>
       <select id="saveMode">
-        <option value="zip">打包成一个 ZIP 文件（最多弹一次框）</option>
-        <option value="files">逐张保存为图片文件</option>
+        <option value="zip" data-i18n="optZip">Pack into a single ZIP file</option>
+        <option value="files" data-i18n="optFiles">Save as individual images</option>
       </select>
     </label>
-    <label class="wide">子文件夹（可选，位于 ~/Downloads/ 下）
-      <input id="subfolder" type="text" placeholder="留空直接保存到 Downloads">
+    <label class="wide"><span data-i18n="lblSubfolder">Subfolder (under ~/Downloads/)</span>
+      <input id="subfolder" type="text" data-i18n-placeholder="placeholderSubfolder" placeholder="Leave empty to save directly to Downloads">
     </label>
     <label class="check">
-      <input id="scrollToTop" type="checkbox"> 开始前先滚动到顶部
+      <input id="scrollToTop" type="checkbox"> <span data-i18n="lblScrollToTop">Scroll to top before starting</span>
     </label>
   </fieldset>
 
   <div class="notice">
-    截图过程中不会保存，全部截完后一次性保存。若仍弹出“另存为”框，是因为 Chrome 开启了
-    <b>“下载前询问每个文件的保存位置”</b>，关闭后即可直接保存。
-    <button id="openSettings" class="link">打开下载设置</button>
+    <span data-i18n="noticeText">Screenshots are buffered in memory and saved all at once. If a Save As dialog appears, please disable "Ask where to save each file before downloading" in Chrome settings.</span>
+    <button id="openSettings" class="link" data-i18n="btnOpenSettings">Open Download Settings</button>
   </div>
 
-  <p class="hint">快捷键：Alt+Shift+S 开始 / 停止</p>
+  <p class="hint" data-i18n="hintShortcut">Shortcut: Alt+Shift+S to start / stop</p>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -1,21 +1,22 @@
 {
   "manifest_version": 3,
-  "name": "Scroll Screenshot",
+  "default_locale": "en",
+  "name": "__MSG_extName__",
   "version": "1.0.0",
-  "description": "截取当前标签页可见区域并自动保存到下载目录，然后自动向下滚动，重复截图直到页面底部。",
+  "description": "__MSG_extDesc__",
   "permissions": ["scripting", "downloads", "storage", "tabs", "offscreen"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Scroll Screenshot",
+    "default_title": "__MSG_extName__",
     "default_popup": "popup.html"
   },
   "commands": {
     "toggle-capture": {
       "suggested_key": { "default": "Alt+Shift+S" },
-      "description": "开始 / 停止滚动截图"
+      "description": "__MSG_commandToggle__"
     }
   }
 }

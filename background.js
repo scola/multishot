@@ -106,19 +106,23 @@ async function saveAll(shots, opts, prefix, sub) {
     if (opts.saveMode === 'files') {
       const ids = [];
       for (let i = 0; i < shots.length; i++) {
-        await setState({ message: `正在保存 ${i + 1}/${shots.length}…` });
+        await setState({
+          message: chrome.i18n.getMessage('statusSavingIndex', [String(i + 1), String(shots.length)])
+        });
         const { url } = await toOffscreen({ type: 'blob-url', dataUrl: shots[i].dataUrl });
         ids.push(await chrome.downloads.download({
           url, filename: withSub(shots[i].name), conflictAction: 'uniquify', saveAs: false
         }));
       }
       await Promise.all(ids.map(waitForDownload));
-      return `${shots.length} 张图片`;
+      return chrome.i18n.getMessage('resultFiles', [String(shots.length)]);
     }
 
     await toOffscreen({ type: 'zip-reset' });
     for (let i = 0; i < shots.length; i++) {
-      await setState({ message: `正在打包 ${i + 1}/${shots.length}…` });
+      await setState({
+        message: chrome.i18n.getMessage('statusPackingIndex', [String(i + 1), String(shots.length)])
+      });
       await toOffscreen({ type: 'zip-add', name: shots[i].name, dataUrl: shots[i].dataUrl });
     }
     const { url } = await toOffscreen({ type: 'zip-finish' });
@@ -126,9 +130,9 @@ async function saveAll(shots, opts, prefix, sub) {
     const id = await chrome.downloads.download({
       url, filename: withSub(zipName), conflictAction: 'uniquify', saveAs: false
     });
-    await setState({ message: '正在写入 ZIP…' });
+    await setState({ message: chrome.i18n.getMessage('statusWritingZip') });
     await waitForDownload(id);
-    return `${zipName}（含 ${shots.length} 张）`;
+    return chrome.i18n.getMessage('resultZip', [zipName, String(shots.length)]);
   } finally {
     await closeOffscreen();
   }
@@ -138,7 +142,7 @@ async function saveAll(shots, opts, prefix, sub) {
 
 // 自包含函数：在目标页面中执行滚动和状态检测
 // action: 'init' | 'scroll'
-function pageAction(action, overlap, scrollToTop, targetArea = 'right') {
+function pageAction(action, overlap, scrollToTop, targetArea = 'right', i18nLabels = {}) {
   const root = document.scrollingElement || document.documentElement || document.body;
   const isRoot = (el) => el === root || el === document.documentElement || el === document.body;
 
@@ -299,15 +303,15 @@ function pageAction(action, overlap, scrollToTop, targetArea = 'right') {
   };
 
   const describe = (el) => {
-    if (isRoot(el)) return '页面主视图 (Window/Document)';
+    const isRight = (!isRoot(el) && ((el.getBoundingClientRect().left + el.getBoundingClientRect().right) / 2 >= window.innerWidth * 0.5));
+    const tagSuffix = isRight ? (i18nLabels?.rightTag || ' [Right area / Comments]') : (i18nLabels?.leftCenterTag || ' [Center/Left content]');
+    if (isRoot(el)) return (i18nLabels?.mainView || 'Main page view (Window/Document)');
     const tag = el.tagName.toLowerCase();
     const id = el.id ? `#${el.id}` : '';
     const cls = typeof el.className === 'string' && el.className.trim()
       ? '.' + el.className.trim().split(/\s+/)[0]
       : '';
-    const r = el.getBoundingClientRect();
-    const isRight = (r.left + r.right) / 2 >= window.innerWidth * 0.5 ? ' [右侧区域/评论区]' : ' [中左侧内容]';
-    return `${tag}${id}${cls}${isRight}`;
+    return `${tag}${id}${cls}${tagSuffix}`;
   };
 
   // 派发真实的 Wheel 事件到该容器正中央
@@ -452,11 +456,17 @@ async function startCapture(tab) {
   };
 
   // ---- 阶段一：只截图，不保存 ----
+  const i18nLabels = {
+    mainView: chrome.i18n.getMessage('mainView'),
+    rightTag: chrome.i18n.getMessage('rightTag'),
+    leftCenterTag: chrome.i18n.getMessage('leftCenterTag')
+  };
+
   try {
     const [{ result: init }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: pageAction,
-      args: ['init', 0, !!opts.scrollToTop, opts.targetArea || 'right']
+      args: ['init', 0, !!opts.scrollToTop, opts.targetArea || 'right', i18nLabels]
     });
     targetName = init?.targetName || '';
     if (opts.scrollToTop) await sleep(opts.delay);
@@ -467,37 +477,46 @@ async function startCapture(tab) {
     while (true) {
       await setState({
         count: shots.length,
-        message: `已截取 ${shots.length} 张（暂存内存）` +
-          (targetName ? `\n滚动区域：${targetName}` : '')
+        message: chrome.i18n.getMessage('statusBuffered', [String(shots.length)]) +
+          (targetName ? '\n' + chrome.i18n.getMessage('scrollAreaPrefix', [targetName]) : '')
       });
 
-      if ((await getState()).state !== 'running') { stopReason = '已手动停止'; break; }
-      if (shots.length >= maxShots) { stopReason = '已达到最多张数'; break; }
+      if ((await getState()).state !== 'running') {
+        stopReason = chrome.i18n.getMessage('reasonStopped');
+        break;
+      }
+      if (shots.length >= maxShots) {
+        stopReason = chrome.i18n.getMessage('reasonMaxReached');
+        break;
+      }
 
       // 滚动到新的可见区域（使用融合式多策略滚动）
       const [{ result: scrollRes }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: pageAction,
-        args: ['scroll', overlap, false, opts.targetArea || 'right']
+        args: ['scroll', overlap, false, opts.targetArea || 'right', i18nLabels]
       });
 
       if (scrollRes?.targetName) targetName = scrollRes.targetName;
 
       // 等待页面重新排版和懒加载图片渲染
       await sleep(opts.delay);
-      if ((await getState()).state !== 'running') { stopReason = '已手动停止'; break; }
+      if ((await getState()).state !== 'running') {
+        stopReason = chrome.i18n.getMessage('reasonStopped');
+        break;
+      }
 
       const dataUrl = await capture();
 
       // 如果画面完全没有改变，且滚动逻辑也汇报没有位移，说明已经到最底部
       if (dataUrl === prev && (!scrollRes || !scrollRes.moved || scrollRes.actualMoved <= 0)) {
-        stopReason = '已滚动到底部';
+        stopReason = chrome.i18n.getMessage('reasonBottomReached');
         break;
       }
 
       // 如果画面没变但是刚才滚动了（可能处于加载中或吸顶元素覆盖），再额外检测一次
       if (dataUrl === prev) {
-        stopReason = '内容无变化，已到底部';
+        stopReason = chrome.i18n.getMessage('reasonNoChange');
         break;
       }
 
@@ -506,25 +525,34 @@ async function startCapture(tab) {
     }
   } catch (err) {
     console.error(err);
-    stopReason = `截图中断：${err.message || err}`;
+    stopReason = chrome.i18n.getMessage('reasonInterrupted', [err.message || String(err)]);
   }
 
   if (!shots.length) {
-    await setState({ state: 'idle', message: `未截取到图片。${stopReason}` });
+    await setState({
+      state: 'idle',
+      message: chrome.i18n.getMessage('statusEmpty', [stopReason])
+    });
     return;
   }
 
   // ---- 阶段二：一次性保存全部截图 ----
-  await setState({ state: 'saving', message: `${stopReason}，正在保存 ${shots.length} 张…` });
+  await setState({
+    state: 'saving',
+    message: chrome.i18n.getMessage('statusSaving', [stopReason, String(shots.length)])
+  });
   try {
     const saved = await saveAll(shots, opts, prefix, sub);
     await setState({
       state: 'idle',
-      message: `完成（${stopReason}）：已保存 ${saved} 到 ~/Downloads/${sub ? sub + '/' : ''}`
+      message: chrome.i18n.getMessage('statusDone', [stopReason, saved, sub ? sub + '/' : ''])
     });
   } catch (err) {
     console.error(err);
-    await setState({ state: 'idle', message: `保存失败：${err.message || err}` });
+    await setState({
+      state: 'idle',
+      message: chrome.i18n.getMessage('statusSaveError', [err.message || String(err)])
+    });
   }
 }
 
