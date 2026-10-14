@@ -135,109 +135,194 @@ async function saveAll(shots, opts, prefix, sub) {
 
 // ---------- 注入到页面中执行的函数 ----------
 
-// 注意：通过 executeScript 注入的函数必须是自包含的（不能引用外部函数）
-// action = 'init'：找到真正负责滚动的元素并标记（可选滚动到顶部）
-// action = 'scroll'：把标记的元素向下滚动一屏，返回是否真的滚动了
+// 自包含函数：在目标页面中执行滚动和状态检测
+// action: 'init' | 'scroll'
 function pageAction(action, overlap, scrollToTop) {
-  const MARK = 'data-scroll-shot-target';
-  const root = document.scrollingElement || document.documentElement;
-  const isRoot = (t) => t === root || t === document.documentElement;
-  const getTop = (t) => (isRoot(t) ? window.scrollY : t.scrollTop);
-  const setTop = (t, y) => {
-    if (isRoot(t)) window.scrollTo({ top: y, left: window.scrollX, behavior: 'instant' });
-    else t.scrollTo({ top: y, left: t.scrollLeft, behavior: 'instant' });
-  };
-  const viewportOf = (t) => (isRoot(t) ? window.innerHeight : t.clientHeight);
+  const root = document.scrollingElement || document.documentElement || document.body;
+  const isRoot = (el) => el === root || el === document.documentElement || el === document.body;
 
-  // 真实测试一个元素能否滚动（向下或向上挪 1px 再恢复）
-  const probe = (t) => {
-    if (!t || t.scrollHeight - t.clientHeight <= 1) return false;
-    const b = getTop(t);
-    setTop(t, b + 1);
-    let ok = getTop(t) !== b;
-    if (!ok) { setTop(t, b - 1); ok = getTop(t) !== b; }
-    setTop(t, b);
-    return ok;
-  };
-  const visibleArea = (el) => {
-    const r = el.getBoundingClientRect();
-    const w = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0));
-    const h = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
-    return w * h;
-  };
-  const describe = (t) => (isRoot(t) ? 'document' :
-    t.tagName.toLowerCase() + (t.id ? '#' + t.id : '') +
-    (typeof t.className === 'string' && t.className.trim() ? '.' + t.className.trim().split(/\s+/)[0] : ''));
-
-  const range = (t) => (isRoot(t) ? t.scrollHeight - window.innerHeight : t.scrollHeight - t.clientHeight);
-
-  const findTarget = () => {
-    // 在“视口中心元素的祖先链 + 整个文档”中，选可滚动距离最大的那个
-    // （以前优先选文档，若文档只能滚几个像素而真正内容在内部容器里，就会出现两张几乎一样的图）
-    const minArea = innerWidth * innerHeight * 0.25;
-    const chain = new Set([root]);
-    let el = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
-    while (el) { chain.add(el); el = el.parentElement; }
-    let best = null;
-    let bestRange = 0;
-    for (const c of chain) {
-      if (!isRoot(c) && visibleArea(c) < minArea) continue;
-      if (!probe(c)) continue;
-      const r = range(c);
-      if (r > bestRange) { best = c; bestRange = r; }
-    }
-    if (best && bestRange >= 100) return best;
-
-    // 兜底：整个页面中“可见面积 × 可滚动距离”最大的元素
-    let bestScore = best ? visibleArea(best) * bestRange : 0;
-    for (const e of document.querySelectorAll('body, body *')) {
-      const r = e.scrollHeight - e.clientHeight;
-      if (r <= 1) continue;
-      const score = visibleArea(e) * r;
-      if (score > bestScore && probe(e)) { best = e; bestScore = score; }
-    }
-    return best;
-  };
-
-  // 目标在屏幕上的可见区域：用于确定鼠标滚轮的位置和每次滚动的距离
-  const geometry = (t) => {
-    let left = 0, top = 0, right = innerWidth, bottom = innerHeight;
-    if (t && !isRoot(t)) {
-      const r = t.getBoundingClientRect();
-      left = Math.max(0, r.left); top = Math.max(0, r.top);
-      right = Math.min(innerWidth, r.right); bottom = Math.min(innerHeight, r.bottom);
+  const getScrollPos = (el) => {
+    if (isRoot(el)) {
+      return {
+        top: window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0,
+        height: window.innerHeight,
+        scrollHeight: Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight || 0)
+      };
     }
     return {
-      vw: innerWidth,
-      cx: Math.round((left + right) / 2),
-      cy: Math.round((top + bottom) / 2),
-      height: Math.round(Math.min(bottom - top, t && !isRoot(t) ? t.clientHeight : innerHeight))
+      top: el.scrollTop,
+      height: el.clientHeight,
+      scrollHeight: el.scrollHeight
     };
   };
 
-  if (action === 'init') {
-    document.querySelectorAll(`[${MARK}]`).forEach((e) => e.removeAttribute(MARK));
-    const t = findTarget();
-    if (t) {
-      t.setAttribute(MARK, '1');
-      if (scrollToTop) setTop(t, 0);
+  const getVisibleArea = (el) => {
+    const r = el.getBoundingClientRect();
+    const w = Math.max(0, Math.min(r.right, window.innerWidth) - Math.max(r.left, 0));
+    const h = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0));
+    return w * h;
+  };
+
+  const canScroll = (el) => {
+    if (!el) return false;
+    if (isRoot(el)) {
+      const sh = Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight || 0);
+      return sh - window.innerHeight > 5;
     }
-    if (scrollToTop && t !== root) setTop(root, 0);
-    return { found: !!t, target: t ? describe(t) : '', ...geometry(t) };
+    const style = window.getComputedStyle(el);
+    const oy = style.overflowY;
+    if (oy !== 'auto' && oy !== 'scroll' && oy !== 'overlay') return false;
+    return el.scrollHeight - el.clientHeight > 5;
+  };
+
+  // 智能寻找主滚动容器
+  const findMainScroller = () => {
+    // 1. 如果窗口/根文档本身有明显滚动条
+    if (canScroll(root)) return root;
+
+    // 2. 从屏幕靠右/靠中位置探测真实元素祖先链中的滚动容器
+    const testPoints = [
+      [window.innerWidth - 30, window.innerHeight / 2],
+      [window.innerWidth / 2, window.innerHeight / 2]
+    ];
+    for (const [x, y] of testPoints) {
+      let cur = document.elementFromPoint(Math.max(10, x), Math.max(10, y));
+      while (cur && cur !== document.documentElement && cur !== document.body) {
+        if (canScroll(cur) && getVisibleArea(cur) > (window.innerWidth * window.innerHeight * 0.2)) {
+          return cur;
+        }
+        cur = cur.parentElement;
+      }
+    }
+
+    // 3. 扫描所有可见容器中滚动区域最大的
+    let best = null;
+    let bestScore = 0;
+    const candidates = document.querySelectorAll('main, [role="main"], article, section, div');
+    for (const el of candidates) {
+      if (canScroll(el)) {
+        const score = getVisibleArea(el) * (el.scrollHeight - el.clientHeight);
+        if (score > bestScore) {
+          best = el;
+          bestScore = score;
+        }
+      }
+    }
+    return best || root;
+  };
+
+  const describe = (el) => {
+    if (isRoot(el)) return '页面整体 (Window/Document)';
+    const tag = el.tagName.toLowerCase();
+    const id = el.id ? `#${el.id}` : '';
+    const cls = typeof el.className === 'string' && el.className.trim()
+      ? '.' + el.className.trim().split(/\s+/)[0]
+      : '';
+    return `${tag}${id}${cls}`;
+  };
+
+  // 派发真实的 Wheel 事件（很多现代框架靠监听 wheel 来驱动虚拟列表）
+  const dispatchWheel = (target, deltaY) => {
+    const rect = isRoot(target) ? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight } : target.getBoundingClientRect();
+    const clientX = Math.max(10, Math.min(window.innerWidth - 10, rect.right - 20));
+    const clientY = Math.max(10, Math.min(window.innerHeight - 10, (rect.top + rect.bottom) / 2));
+
+    const event = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX,
+      clientY,
+      screenX: clientX,
+      screenY: clientY,
+      deltaX: 0,
+      deltaY,
+      deltaMode: WheelEvent.DOM_DELTA_PIXEL
+    });
+    (isRoot(target) ? (document.elementFromPoint(clientX, clientY) || document.body) : target).dispatchEvent(event);
+  };
+
+  // 派发 PageDown / ArrowDown 键盘事件作为强力兜底
+  const dispatchKey = (key = 'PageDown') => {
+    const active = document.activeElement || document.body;
+    active.dispatchEvent(new KeyboardEvent('keydown', { key, code: key, bubbles: true, cancelable: true }));
+    active.dispatchEvent(new KeyboardEvent('keyup', { key, code: key, bubbles: true, cancelable: true }));
+  };
+
+  // 智能检测顶部固定吸顶元素（fixed / sticky），计算有效可见内容高度
+  const getHeaderOffset = () => {
+    let maxBottom = 0;
+    const elements = document.querySelectorAll('header, nav, [role="banner"], [class*="header"], [class*="nav"], [class*="topbar"]');
+    for (const el of elements) {
+      const style = window.getComputedStyle(el);
+      if (style.position === 'fixed' || style.position === 'sticky') {
+        const r = el.getBoundingClientRect();
+        if (r.top <= 10 && r.bottom > 0 && r.bottom < window.innerHeight * 0.4 && r.width > window.innerWidth * 0.5) {
+          if (r.bottom > maxBottom) maxBottom = r.bottom;
+        }
+      }
+    }
+    return Math.round(maxBottom);
+  };
+
+  const target = findMainScroller();
+  const beforePos = getScrollPos(target);
+
+  if (action === 'init') {
+    if (scrollToTop) {
+      if (isRoot(target)) {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } else {
+        target.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      }
+    }
+    return {
+      success: true,
+      targetName: describe(target),
+      scrollTop: getScrollPos(target).top,
+      scrollHeight: getScrollPos(target).scrollHeight
+    };
   }
 
-  // action === 'scroll'（无法使用调试器滚轮时的备用方案）
-  let t = document.querySelector(`[${MARK}]`);
-  if (!t) {
-    t = findTarget();
-    if (!t) return { moved: false };
-    t.setAttribute(MARK, '1');
+  // action === 'scroll': 精确向下滚动一屏
+  const viewportH = beforePos.height || window.innerHeight;
+  const headerOffset = getHeaderOffset(); // 如果有顶部固定导航条，避免下一屏被遮挡
+  const manualOverlap = Math.max(0, overlap);
+
+  // 科学步长：刚好等于当前视口高度，减去吸顶导航栏高度，再减去设定的重叠像素（若未设重叠，保留 30px 作为视觉无缝衔接裕量）
+  const effectiveOverlap = manualOverlap > 0 ? manualOverlap : (headerOffset > 0 ? headerOffset + 20 : 40);
+  const scrollStep = Math.max(50, viewportH - effectiveOverlap);
+  const targetY = beforePos.top + scrollStep;
+
+  // 1. 首选：精确位置滚动（直接赋值 targetY，确保不滚多也不滚少）
+  if (isRoot(target)) {
+    window.scrollTo({ top: targetY, left: window.scrollX, behavior: 'instant' });
+  } else {
+    target.scrollTo({ top: targetY, left: target.scrollLeft, behavior: 'instant' });
   }
-  const before = getTop(t);
-  const step = Math.max(50, viewportOf(t) - overlap);
-  setTop(t, before + step);
-  const after = getTop(t);
-  return { moved: after - before > 0.5, target: describe(t), top: after };
+
+  let afterPos = getScrollPos(target);
+  let movedDistance = afterPos.top - beforePos.top;
+
+  // 2. 备用：如果页面不支持绝对坐标或者是个虚拟列表容器，才回退到 wheel / key
+  if (movedDistance <= 1) {
+    dispatchWheel(target, scrollStep);
+    afterPos = getScrollPos(target);
+    movedDistance = afterPos.top - beforePos.top;
+  }
+
+  if (movedDistance <= 1) {
+    dispatchKey('PageDown');
+    afterPos = getScrollPos(target);
+    movedDistance = afterPos.top - beforePos.top;
+  }
+
+  return {
+    moved: movedDistance > 2,
+    actualMoved: movedDistance,
+    scrollTop: afterPos.top,
+    targetName: describe(target)
+  };
 }
 
 // ---------- 主流程 ----------
@@ -257,8 +342,6 @@ async function startCapture(tab) {
   let stopReason = '';
   const maxShots = Number(opts.maxShots) > 0 ? Number(opts.maxShots) : SAFETY_MAX_SHOTS;
   const overlap = Number(opts.overlap) || 0;
-  const debuggee = { tabId: tab.id };
-  let useWheel = false;
 
   const capture = async () => {
     // 确认仍然在目标标签页上（captureVisibleTab 只能截取当前激活的标签页）
@@ -274,50 +357,15 @@ async function startCapture(tab) {
     return dataUrl;
   };
 
-  // 备用滚动：直接修改页面元素的滚动位置
-  const domScroll = async () => {
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: pageAction,
-      args: ['scroll', overlap, false]
-    });
-    if (result?.target) targetName = result.target;
-    return !!result?.moved;
-  };
-
   // ---- 阶段一：只截图，不保存 ----
   try {
-    // 附加调试器，用“真实鼠标滚轮”滚动——和用户手动滚动效果一致，
-    // 对内部滚动容器、iframe、虚拟列表等都有效
-    try {
-      await chrome.debugger.attach(debuggee, '1.3');
-      useWheel = true;
-      await sleep(500); // 等待调试提示条出现后视口尺寸稳定
-    } catch (e) {
-      console.warn('无法附加调试器，改用 DOM 滚动：', e);
-    }
-
     const [{ result: init }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: pageAction,
       args: ['init', 0, !!opts.scrollToTop]
     });
-    targetName = init?.target || '';
-    // 鼠标放在屏幕最右侧（垂直方向取滚动区域的中间）
-    const wheelX = Math.max(0, (init?.vw ?? 800) - 2);
-    const wheelY = init?.cy ?? 300;
-    const step = Math.max(50, (init?.height || 600) - overlap);
+    targetName = init?.targetName || '';
     if (opts.scrollToTop) await sleep(opts.delay);
-
-    const wheelScroll = async () => {
-      // 先把鼠标移到最右侧，再在该位置滚动滚轮
-      await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
-        type: 'mouseMoved', x: wheelX, y: wheelY
-      });
-      await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
-        type: 'mouseWheel', x: wheelX, y: wheelY, deltaX: 0, deltaY: step
-      });
-    };
 
     let prev = await capture();
     shots.push({ name: `${prefix}_001.${ext}`, dataUrl: prev });
@@ -326,30 +374,38 @@ async function startCapture(tab) {
       await setState({
         count: shots.length,
         message: `已截取 ${shots.length} 张（暂存内存）` +
-          (targetName ? `\n滚动区域：${targetName}` : '') + (useWheel ? '' : '\n（DOM 滚动模式）')
+          (targetName ? `\n滚动区域：${targetName}` : '')
       });
 
       if ((await getState()).state !== 'running') { stopReason = '已手动停止'; break; }
       if (shots.length >= maxShots) { stopReason = '已达到最多张数'; break; }
 
-      // 滚动到新的可见区域
-      let moved = true;
-      if (useWheel) await wheelScroll();
-      else moved = await domScroll();
-      if (!moved) { stopReason = '已滚动到底部'; break; }
+      // 滚动到新的可见区域（使用融合式多策略滚动）
+      const [{ result: scrollRes }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: pageAction,
+        args: ['scroll', overlap, false]
+      });
 
+      if (scrollRes?.targetName) targetName = scrollRes.targetName;
+
+      // 等待页面重新排版和懒加载图片渲染
       await sleep(opts.delay);
       if ((await getState()).state !== 'running') { stopReason = '已手动停止'; break; }
 
-      let dataUrl = await capture();
+      const dataUrl = await capture();
 
-      // 画面没有变化：滚轮没生效时再用 DOM 滚动试一次
-      if (dataUrl === prev && useWheel && await domScroll()) {
-        await sleep(opts.delay);
-        dataUrl = await capture();
+      // 如果画面完全没有改变，且滚动逻辑也汇报没有位移，说明已经到最底部
+      if (dataUrl === prev && (!scrollRes || !scrollRes.moved || scrollRes.actualMoved <= 0)) {
+        stopReason = '已滚动到底部';
+        break;
       }
-      // 仍然完全相同，说明已经无法再滚动，丢弃这张重复图
-      if (dataUrl === prev) { stopReason = '已滚动到底部'; break; }
+
+      // 如果画面没变但是刚才滚动了（可能处于加载中或吸顶元素覆盖），再额外检测一次
+      if (dataUrl === prev) {
+        stopReason = '内容无变化，已到底部';
+        break;
+      }
 
       shots.push({ name: `${prefix}_${String(shots.length + 1).padStart(3, '0')}.${ext}`, dataUrl });
       prev = dataUrl;
@@ -357,10 +413,6 @@ async function startCapture(tab) {
   } catch (err) {
     console.error(err);
     stopReason = `截图中断：${err.message || err}`;
-  } finally {
-    if (useWheel) {
-      try { await chrome.debugger.detach(debuggee); } catch (e) { /* 已断开 */ }
-    }
   }
 
   if (!shots.length) {

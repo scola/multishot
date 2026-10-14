@@ -3,7 +3,7 @@
   "name": "Scroll Screenshot",
   "version": "1.0.0",
   "description": "截取当前标签页可见区域并自动保存到下载目录，然后自动向下滚动，重复截图直到页面底部。",
-  "permissions": ["scripting", "downloads", "storage", "tabs", "offscreen", "debugger"],
+  "permissions": ["scripting", "downloads", "storage", "tabs", "offscreen"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
